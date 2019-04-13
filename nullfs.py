@@ -7,19 +7,38 @@ from time import time
 
 from fuse import FUSE, FuseOSError, Operations, LoggingMixIn
 
+file_count = 0
+
+
+class Node(object):
+    def __init__(self, mode, nlink=1):
+        global file_count
+
+        now = time()
+        file_count += 1
+        self.file_handle = file_count
+        self.attributes = dict(
+            st_mode=mode,
+            st_nlink=nlink,
+            st_size=0,
+            st_ctime=now,
+            st_mtime=now,
+            st_atime=now,
+        )
+
+    def __setitem__(self, key, value):
+        self.attributes[key] = value
+
+    def __getitem__(self, key):
+        return self.attributes[key]
+
 
 class NullFS(LoggingMixIn, Operations):
     'Null filesystem.'
 
     def __init__(self):
         self.files = {}
-        now = time()
-        self.files['/'] = dict(
-            st_mode=(S_IFDIR | 0o755),
-            st_ctime=now,
-            st_mtime=now,
-            st_atime=now,
-            st_nlink=2)
+        self.files['/'] = Node(S_IFDIR | 0o755, 2)
 
     def chmod(self, path, mode):
         self.files[path]['st_mode'] &= 0o770000
@@ -31,35 +50,21 @@ class NullFS(LoggingMixIn, Operations):
         self.files[path]['st_gid'] = gid
 
     def create(self, path, mode):
-        self.files[path] = dict(
-            st_mode=(S_IFREG | mode),
-            st_nlink=1,
-            st_size=0,
-            st_ctime=time(),
-            st_mtime=time(),
-            st_atime=time())
-
-        return 0
+        self.files[path] = Node(S_IFREG | mode)
+        return self.files[path].file_handle
 
     def getattr(self, path, fh=None):
         if path not in self.files:
             raise FuseOSError(ENOENT)
 
-        return self.files[path]
+        return self.files[path].attributes
 
     def mkdir(self, path, mode):
-        self.files[path] = dict(
-            st_mode=(S_IFDIR | mode),
-            st_nlink=2,
-            st_size=0,
-            st_ctime=time(),
-            st_mtime=time(),
-            st_atime=time())
-
-        self.files['/']['st_nlink'] += 1
+        self.files[path] = Node(S_IFDIR | mode, 2)
+        self.files['/']['st_nlink'] += 1  # TODO use parent path
 
     def open(self, path, flags):
-        return 0
+        return self.files[path].file_handle
 
     def read(self, path, size, offset, fh):
         return []
@@ -75,16 +80,13 @@ class NullFS(LoggingMixIn, Operations):
 
     def rmdir(self, path):
         self.files.pop(path)
-        self.files['/']['st_nlink'] -= 1
+        self.files['/']['st_nlink'] -= 1  # TODO use parent path
 
     def statfs(self, path):
         return dict(f_bsize=512, f_blocks=4096, f_bavail=2048)
 
     def symlink(self, target, source):
-        self.files[target] = dict(
-            st_mode=(S_IFLNK | 0o777),
-            st_nlink=1,
-            st_size=len(source))
+        self.files[target] = Node(S_IFLNK | 0o777)
 
     def truncate(self, path, length, fh=None):
         pass

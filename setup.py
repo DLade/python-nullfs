@@ -40,7 +40,7 @@ setup(
         # Development Status :: 5 - Production/Stable
         # Development Status :: 6 - Mature
         # Development Status :: 7 - Inactive
-        "Development Status :: 1 - Planning",
+        "Development Status :: 3 - Alpha",
         "Topic :: System :: Filesystems",
         "Programming Language :: Python :: 3.5",
         "Programming Language :: Python :: 3.6",
